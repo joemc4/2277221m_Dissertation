@@ -1,0 +1,479 @@
+---
+title: "Dissertation"
+author: "Joseph McMillan"
+date: '2022-07-14'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error=F,  message=F, warning=F)
+# Clears workspace so I don't have to do it manually
+rm(list = ls())
+# Clears all plotts so I don't have to do it manually 
+graphics.off()
+# Clears console so I don't have to do it manually
+cat("\014")
+```
+
+```{r, include=FALSE}
+setwd("~/Documents/UA/DISSO/Data_code")
+```
+
+```{r, include=FALSE}
+library(textclean)
+library(tidyEmoji)
+library(tidyverse)
+library(NLP)
+library(maps)
+library(tictoc)
+library(countrycode)
+library(parallel)
+```
+
+```{r}
+#1.7 million tweets
+load("tweets_joined.rda")
+#gc()
+```
+
+```{r}
+# drops 503454 values that have an n/a value somewhere in the 5 variabels
+twitterdata <- drop_na(tweets_merge)
+#save(twitterdata, file="tweets_dropna.rda")
+#gc()
+```
+
+```{r}
+#408657 unique authors_ids
+unique_loc <- unique(twitterdata$profile_location)
+gc()
+```
+
+```{r}
+#load("tweets_dropna.rda")
+```
+
+```{r}
+# tdx <- sample_n(twitterdata, 1000)
+tdx <- twitterdata
+gc()
+```
+
+```{r}
+#seperate location data as own list for data cleaning 
+tdxloc <- tdx$profile_location
+#lower case all text
+tdxloc<- tolower(tdxloc)
+#deletes @s
+tdxloc<-gsub("@\\w+", "", tdxloc)
+#deletes punctuation
+tdxloc<- gsub("[[:punct:]]", "", tdxloc)
+#deletes links
+tdxloc<- gsub("http\\w+", "", tdxloc)
+#deletes spaces at the start
+tdxloc<- gsub("^ ", "", tdxloc)
+#deletes spaces at the end 
+tdxloc<- gsub(" $", "", tdxloc)
+#deletes random spaces
+tdxloc<- gsub("^ +| +$|( ) +", "\\1", tdxloc)
+gc()
+```
+
+
+```{r}
+tdx$location_clean <- tdxloc
+```
+
+```{r}
+unique_loc2 <- unique(tdx$location_clean)
+gc()
+```
+
+
+```{r}
+tic()
+tdx$location_clean[grepl("^colombo$", tdx$location_clean,)] <- "sri lanka"
+tdx$location_clean[grep("^*norway*", tdx$location_clean,)] <- "norway"
+tdx$location_clean[grep("^*oslo*", tdx$location_clean,)] <- "norway"
+tdx$location_clean[grep("^*bergen*", tdx$location_clean,)] <- "norway"
+tdx$location_clean[grepl("^va$", tdx$location_clean,)] <- "usa"
+tdx$location_clean[grepl("^wa$", tdx$location_clean,)] <- "usa"
+tdx$location_clean[grepl("^bc$", tdx$location_clean,)] <- "canada"
+tdx$location_clean[grepl("^nc$", tdx$location_clean,)] <- "usa"
+tdx$location_clean[grepl("^nl$", tdx$location_clean,)] <- "netherlands"
+tdx$location_clean[grepl("^bp$", tdx$location_clean,)] <- "solomon islands"
+tdx$location_clean[grepl("^eu$", tdx$location_clean,)] <- "eu"
+tdx$location_clean[grepl("^uk$", tdx$location_clean,)] <- "uk"
+tdx$location_clean[grepl("^riga$", tdx$location_clean,)] <- "latvia"
+tdx$location_clean[grepl("^nyc$", tdx$location_clean,)] <- "usa"
+tdx$location_clean[grepl("^ny$", tdx$location_clean,)] <- "usa"
+tdx$location_clean[grepl("^ca$", tdx$location_clean,)] <- "usa"
+tdx$location_clean[grepl("^dc$", tdx$location_clean,)] <- "usa"
+tdx$location_clean[grepl("^us$", tdx$location_clean,)] <- "usa"
+tdx$location_clean[grepl("^lima$", tdx$location_clean,)] <- "peru"
+tdx$location_clean[grepl("^lima peru$", tdx$location_clean,)] <- "peru"
+tdx$location_clean[grepl("^palau$", tdx$location_clean,)] <- "palau"
+tdx$location_clean[grep("^maldives|feydhoo addu city|mdp northariatoll maldives|rep of maldives|male maldives$", tdx$location_clean,)] <- "maldives"
+tdx$location_clean[grepl("^male$", tdx$location_clean,)] <- "maldives"
+tdx$location_clean[grepl("^new york$",tdx$location_clean,)] <- "usa"
+tdx$location_clean[grepl("^york$",tdx$location_clean,)] <- "uk"
+tdx$location_clean[grepl("^york uk$",tdx$location_clean,)] <- "uk"
+tdx$location_clean[grepl("^palau$", tdx$location_clean,)] <- "palau"
+tdx$location_clean[grepl("^new south wales$",tdx$location_clean,)] <- "australia"
+tdx$location_clean[grepl("^wales$",tdx$location_clean,)] <- "uk"
+tdx$location_clean[grepl("^nova scotia*",tdx$location_clean,)] <- "canada"
+tdx$location_clean[grepl("^new england$",tdx$location_clean,)] <- "usa"
+tdx$location_clean[grep("^jerusalem$", tdx$location_clean,)] <- "israel"
+tdx$location_clean[grepl("^england$",tdx$location_clean,)] <- "uk"
+
+tdx$location_clean[grep("^*london|united kingdom|liverpool|bristol|oxford|westminster|manchester|scotland|aberystwyth wales|great britain|glasgow|edinburgh|northern ireland|belfast|leeds|scot|scottish borders|cornwall|sheffield|yorkshire|nottingham|brighton|kent|birmingham|north yorkshire| yorkshire and the humber|aberdeen|devon|essex|norwich|cumbria|hampshire|suffolk|somerset|hertfordshire|west midlands|derbyshire|norfolk|exeter|cheshire|ayrshire|dorset|cymru|isle of wight|surrey|wiltshire|lincolnshire|fife|gloucestershire|plymouth|staffordshire|eastbourne|dundee|southampton|warwickshire|wirral|shropshire|britain|east anglia|inverness|alba|moray|south west|linlithgow|pembrokeshire|caerphilly|lancaster uk|bishops castle*", tdx$location_clean,)] <- "uk"
+
+tdx$location_clean[grep("^*durham|east kilbride|chester|ayr|merseyside|clydebank|highlands|loughborough|perth|hull|brown edge endon staffs|stirling|flakirk|berkhamsted|midlands|northumberland|falkirk|isle of man|lanarkshire|argyll|enfield|south kensington|bishopbriggs|guernsey|east lothian|glesga|teesside|walsall|cotswolds|berkshire|portobellocraigmillar edinbu|leith|dumfries and galloway|ldn|dumfries|south shields tyne and wear|brigadoon|shrewsbury|buckinghamshire|leith|rutherglen|st andrews|chastown|pictland|chasetown|angus|west sussex|sussex|east sussex|lewes east sussex|langtoun uk|uk and ireland|uk ireland|lancashire|newcastle|lancashire uk|chorley lancashire uk|south wales uk|north wales uk|wales uk|conwy north wales|newport wales|republic of wales|south wales|north wales*", tdx$location_clean,)] <- "uk"
+
+tdx$location_clean[grep("^*birmingham|glasgow|liverpool|bristol|manchester|sheffield|leeds|edinburgh|leicester|coventry|bradford|cardiff|belfast|nottingham|kingston upon hull|newcastle upon tyne|stoke on trent|southampton|derby|portsmouth|brighton|plymouth|northampton|reading|luton|wolverhampton|bolton|aberdeen|bournemouth|norwich|swindon|swansea|milton keynes|southend on sea|middlesbrough|peterborough|sunderland|warrington|huddersfield|slough|oxford|poole|ipswich|telford|cambridge|dundee|gloucester|blackpool|birkenhead|watford|sale|colchester|solihull|high wycombe|exeter|gateshead|blackburn|cheltenham|maidstone|chelmsford|salford|basildon|doncaster|basingstoke|worthing|eastbourne|crawley|rochdale|rotherham|stockport|gillingham|sutton coldfield|woking|wigan|lincoln|oldham|wakefield|st helens|worcester|hemel hempstead|bath|preston|rayleigh|barnsley|stevenage|hastings|southport|darlington|bedford|halifax|hartlepool|chesterfield|nuneaton|grimsby*", tdx$location_clean,)] <- "uk"
+
+tdx$location_clean[grepl(".*london.*",tdx$location_clean,)] <- "uk"
+tdx$location_clean[grepl(".*england.*",tdx$location_clean,)] <- "uk"
+
+tdx$location_clean[grep("^*united states|united states of america|america|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|seattle|boston|portland|austin|dallas|los angeles|san francisco|philadelphia|atlanta|denver|miami|minneapolis|las vegas nv|las vegas|boulder|boulder co|turtle island|queens ny|laguna beach ca|mountain view ca|ithaca ny*", tdx$location_clean,)] <- "usa"
+
+tdx$location_clean[grep("^*los angeles|chicago|houston|philadelphia|phoenix|san antonio|san diego|dallas|san jose|austin|jacksonville|san francisco|indianapolis|columbus|fort worth|charlotte|seattle|denver|el paso|detroit|washington|boston|memphis|nashville|portlan|oklahoma city|las vegas|baltimore|louisville|milwaukee|albuquerque|tucson|fresno|sacramento|kansas city|long beach|mesa|atlanta|colorado springs|virginia beach|raleigh|omaha|miami|oakland|minneapolis|tulsa|wichita|new orleans|arlington|pittsburgh pa|sf bay area|ann arbor mi|brooklyn|penn state university pa|santa cruz ca|buffalo ny*", tdx$location_clean,)] <- "usa"
+
+tdx$location_clean[grep("^*orlando fl|st louis mo|tacoma wa|tampa fl|farmington hills mi|honolulu hi|silver spring md|joplin mo|occupied chumash territory|madison wi|cleveland oh.springfield|salt lake city ut|st paul mn|cleveland oh|eugene or usa|manhattan ny|berkeley ca|berkelr|palo alto|palo alto ca|ny ny|bay area ca|bay area|silicon valley|vallejo ca|richmond va*", tdx$location_clean,)] <- "usa"
+
+tdx$location_clean[grep("^*melbourne|australia|sydney|nsw|fnq|queensland|brisbane|adelaide|victoria|gold coast|wurundjeri land|qld|wurundjeri country|hobart tasmania|tasmania|hobart|ngunnawal countr|port macquarie|manning point|melbourn boonwurrung country|ngarrindjeri country|wurundjeri|meanjin|darwin northern territory|bundjalung country|gadigal land|living on awabakal land|canberra|perth oz|byron bay new south wales,|byron bay new south wales*", tdx$location_clean,)] <- "australia"
+
+tdx$location_clean[grep("^*dublin|kildare ireland|cork|galway|donegal ireland|waterford|waterford ireland|limerick|limerick ireland|wexford|wexford ireland|meath ireland|meath|sligo|sligo ireland|co clare|south dublin ireland*", tdx$location_clean,)] <- "ireland"
+
+tdx$location_clean[grep("^*china|beijing|shanghai|wuhan|shenzhen*", tdx$location_clean,)] <- "china"
+
+tdx$location_clean[grep("^*india|mumbai|new delhi|delhi|bangalore|bharat|chennai|noida|ahmedabad|kolkata|coimbatore|bengaluru|naarm|hyderabad|pune|bhubaneswar|gujarat india|patna india|uttar pradesh india|ahmadabad city india|surat india|lucknow india|gurgaon india|ranchi india|rajasthan india|mohali india|kerala india|tamil nadu india|maharashtra india|jaipur india|bihar india|nagpur india|madhya pradesh india|punjab india|west bengal india|union of india|goa india|gorakhpur india|kanpur india|nashik india|ghaziabad india|bhopal india|agra india|pondicherry india|indore india|karnataka india|jodhpur india|hindustan|guwahati india|bhubaneshwar india|1
+varanasi india|varanasi*", tdx$location_clean,)] <- "india"
+
+tdx$location_clean[grep("^*fracne|paris|iledefrance|france*", tdx$location_clean,)] <- "france"
+
+tdx$location_clean[grep("^*berlin|bonn|germany|potsdam|hamburg|frankfurt|deutchland|munich|dresden|badenbaden deutschland|de deutsche grenze de brd eu|deutschland*", tdx$location_clean,)] <- "germany"
+
+tdx$location_clean[grep("^*canada|ontario|qubec|toronto|ottawa|vancouver|victoria bc|alberta|edmonton|british columbia|winnipeg|manitoba|new songhees esquimalt bc|montreal|unceded algonquin territory|wsanec territory bc|unceded coast salish territory|coast salish territory|regina saskatchewan|occupied anishinaabeg lands|saskatoon saskatchewan|calgary|socalled canada|saskatchewan canada|saskatchewan|bc canada|calgary ab|moncton nb canada|moncton|nova scotia*", tdx$location_clean,)] <- "canada"
+
+tdx$location_clean[grep("^*afghanistan*", tdx$location_clean,)] <- "afghanistan"
+tdx$location_clean[grep("^*albania*", tdx$location_clean,)] <- "albania"
+tdx$location_clean[grep("^*algeria*", tdx$location_clean,)] <- "algeria"
+tdx$location_clean[grep("^*andorra*", tdx$location_clean,)] <- "andorra"
+tdx$location_clean[grep("^*angola*", tdx$location_clean,)] <- "angola"
+tdx$location_clean[grep("^*antigua and barbuda*", tdx$location_clean,)] <- "antigua and barbuda"
+tdx$location_clean[grep("^*argentina|buenos aires*", tdx$location_clean,)] <- "argentina"
+tdx$location_clean[grep("^*armenia*", tdx$location_clean,)] <- "armenia"
+tdx$location_clean[grep("^*austria|vienna|wien*", tdx$location_clean,)] <- "austria"
+tdx$location_clean[grep("^*azerbaijan*", tdx$location_clean,)] <- "azerbaijan"
+tdx$location_clean[grep("^*bahamas*", tdx$location_clean,)] <- "bahamas"
+tdx$location_clean[grep("^*bahrain*", tdx$location_clean,)] <- "bahrain"
+tdx$location_clean[grep("^*bangladesh|dhaka*", tdx$location_clean,)] <- "bangladesh"
+tdx$location_clean[grep("^*barbados*", tdx$location_clean,)] <- "barbados"
+tdx$location_clean[grep("^*belarus*", tdx$location_clean,)] <- "belarus"
+tdx$location_clean[grep("^*belgium|bruxelles|belgique|brussels belgium|brussels*", tdx$location_clean,)] <- "belgium"
+tdx$location_clean[grep("^*belize*", tdx$location_clean,)] <- "belize"
+tdx$location_clean[grep("^*benin*", tdx$location_clean,)] <- "benin"
+tdx$location_clean[grep("^*bhutan*", tdx$location_clean,)] <- "bhutan"
+tdx$location_clean[grep("^*bolivia*", tdx$location_clean,)] <- "bolivia"
+tdx$location_clean[grep("^*bosnia and herzegovina*", tdx$location_clean,)] <- "bosnia and herzegovina"
+tdx$location_clean[grep("^*botswana*", tdx$location_clean,)] <- "botswana"
+tdx$location_clean[grep("^*brazil|rio de janeiro brasil|rio de janeiro|brasil|sao paulo brazil|sao paulo*", tdx$location_clean,)] <- "brazil"
+tdx$location_clean[grep("^*brunei*", tdx$location_clean,)] <- "brunei"
+tdx$location_clean[grep("^*bulgaria*", tdx$location_clean,)] <- "bulgaria"
+tdx$location_clean[grep("^*burkina faso*", tdx$location_clean,)] <- "burkina faso"
+tdx$location_clean[grep("^*burundi*", tdx$location_clean,)] <- "burundi"
+tdx$location_clean[grep("^*cabo verde*", tdx$location_clean,)] <- "cabo verde"
+tdx$location_clean[grep("^*cambodia|phnom penh*", tdx$location_clean,)] <- "cambodia"
+tdx$location_clean[grep("^*cameroon*", tdx$location_clean,)] <- "cameroon"
+tdx$location_clean[grep("^*central african republic*", tdx$location_clean,)] <- "central african republic"
+tdx$location_clean[grep("^*chad*", tdx$location_clean,)] <- "chad"
+tdx$location_clean[grep("^*chile|santiago chile|santiago*", tdx$location_clean,)] <- "chile"
+tdx$location_clean[grep("^*colombia|bogota|cali colombia*", tdx$location_clean,)] <- "colombia"
+tdx$location_clean[grep("^*comoros*", tdx$location_clean,)] <- "comoros"
+tdx$location_clean[grep("^*congo|kinshasa|democratic republic of congo*", tdx$location_clean,)] <- "democratic republic of the congo"
+tdx$location_clean[grep("^*costa rica*", tdx$location_clean,)] <- "costa rica"
+tdx$location_clean[grep("^*cote d ivoire|cote divoire|ivory cost*", tdx$location_clean,)] <- "ivory coast"
+tdx$location_clean[grep("^*croatia|zagreb croatia*", tdx$location_clean,)] <- "croatia"
+tdx$location_clean[grep("^*cuba*", tdx$location_clean,)] <- "cuba"
+tdx$location_clean[grep("^*cyprus*", tdx$location_clean,)] <- "cyprus"
+tdx$location_clean[grep("^*czechia|prague czech republic| the czech republic|prauge|czech republic*", tdx$location_clean,)] <- "czech republic"
+tdx$location_clean[grep("^*denmark|copenhagen|danmark*", tdx$location_clean,)] <- "denmark"
+tdx$location_clean[grep("^*djibouti*", tdx$location_clean,)] <- "djibouti"
+tdx$location_clean[grep("^*dominica*", tdx$location_clean,)] <- "dominica"
+tdx$location_clean[grep("^*dominican republic*", tdx$location_clean,)] <- "dominican republic"
+tdx$location_clean[grep("^*ecuador|quito|guayaquil*", tdx$location_clean,)] <- "ecuador"
+tdx$location_clean[grep("^*egypt|cairo egypt|cairo*", tdx$location_clean,)] <- "egypt"
+tdx$location_clean[grep("^*el salvador*", tdx$location_clean,)] <- "el salvador"
+tdx$location_clean[grep("^*equatorial guinea*", tdx$location_clean,)] <- "equatorial guinea"
+tdx$location_clean[grep("^*eritrea*", tdx$location_clean,)] <- "eritrea"
+tdx$location_clean[grep("^*estonia|tallinn estonia*", tdx$location_clean,)] <- "estonia"
+tdx$location_clean[grep("^*eswatini*", tdx$location_clean,)] <- "eswatini"
+tdx$location_clean[grep("^*ethiopia|addis ababa ethiopia*", tdx$location_clean,)] <- "ethiopia"
+tdx$location_clean[grep("^*fiji|suva fiji|suva*", tdx$location_clean,)] <- "fiji"
+tdx$location_clean[grep("^*finland|helsinki|suomi*", tdx$location_clean,)] <- "finland"
+tdx$location_clean[grep("^*gabon*", tdx$location_clean,)] <- "gabon"
+tdx$location_clean[grep("^*gambia*", tdx$location_clean,)] <- "gambia"
+tdx$location_clean[grep("^*georgia*", tdx$location_clean,)] <- "georgia"
+tdx$location_clean[grep("^*ghana|accra|tema ghana|presidential villas state house ghana|kumasi ghana*", tdx$location_clean,)] <- "ghana"
+tdx$location_clean[grep("^*greece|athens|gerakas attikis greece|volos greece*", tdx$location_clean,)] <- "greece"
+tdx$location_clean[grep("^*grenada*", tdx$location_clean,)] <- "grenada"
+tdx$location_clean[grep("^*guatemala*", tdx$location_clean,)] <- "guatemala"
+tdx$location_clean[grep("^*guinea*", tdx$location_clean,)] <- "guinea"
+tdx$location_clean[grep("^*guinea bissau*", tdx$location_clean,)] <- "guinea bissau"
+tdx$location_clean[grep("^*guyana*", tdx$location_clean,)] <- "guyana"
+tdx$location_clean[grep("^*haiti*", tdx$location_clean,)] <- "haiti"
+tdx$location_clean[grep("^*honduras*", tdx$location_clean,)] <- "honduras"
+tdx$location_clean[grep("^*hungary|budapest*", tdx$location_clean,)] <- "hungary"
+tdx$location_clean[grep("^*iceland*", tdx$location_clean,)] <- "iceland"
+tdx$location_clean[grep("^*indonesia|jakarta|bali indonesia*", tdx$location_clean,)] <- "indonesia"
+tdx$location_clean[grep("^*iran*", tdx$location_clean,)] <- "iran"
+tdx$location_clean[grep("^*iraq*", tdx$location_clean,)] <- "iraq"
+tdx$location_clean[grep("^*israel|tel aviv|tel aviv israel*", tdx$location_clean,)] <- "israel"
+tdx$location_clean[grep("^*italy|italia|rome|torino piemonte|lazio|roma|milano|milan|florence italy|tuscany|tuscany italy*", tdx$location_clean,)] <- "italy"
+tdx$location_clean[grep("^*jamaica|kingston jamaica|kingston*", tdx$location_clean,)] <- "jamaica"
+tdx$location_clean[grep("^*japan|tokyo|osaka*", tdx$location_clean,)] <- "japan"
+tdx$location_clean[grep("^*jordan|amman*", tdx$location_clean,)] <- "jordan"
+tdx$location_clean[grep("^*kazakhstan*", tdx$location_clean,)] <- "kazakhstan"
+tdx$location_clean[grep("^*kenya|karen nairobi|karen|nairobi|eldoret kenya|kiambu kenya|kiambu|nakuru kenya|nakuru|kisumu kenya|kisumu|mombasa|mombasa kenya*", tdx$location_clean,)] <- "kenya"
+tdx$location_clean[grep("^*kiribati*", tdx$location_clean,)] <- "kiribati"
+tdx$location_clean[grep("^*kosovo*", tdx$location_clean,)] <- "kosovo"
+tdx$location_clean[grep("^*kuwait*", tdx$location_clean,)] <- "kuwait"
+tdx$location_clean[grep("^*kyrgyzstan*", tdx$location_clean,)] <- "kyrgyzstan"
+tdx$location_clean[grep("^*laos*", tdx$location_clean,)] <- "laos"
+tdx$location_clean[grep("^*latvia*", tdx$location_clean,)] <- "latvia"
+tdx$location_clean[grep("^*lebanon*", tdx$location_clean,)] <- "lebanon"
+tdx$location_clean[grep("^*lesotho*", tdx$location_clean,)] <- "lesotho"
+tdx$location_clean[grep("^*liberia*", tdx$location_clean,)] <- "liberia"
+tdx$location_clean[grep("^*libya*", tdx$location_clean,)] <- "libya"
+tdx$location_clean[grep("^*liechtenstein*", tdx$location_clean,)] <- "liechtenstein"
+tdx$location_clean[grep("^*lithuania*", tdx$location_clean,)] <- "lithuania"
+tdx$location_clean[grep("^*luxembourg*", tdx$location_clean,)] <- "luxembourg"
+tdx$location_clean[grep("^*madagascar*", tdx$location_clean,)] <- "madagascar"
+tdx$location_clean[grep("^*malawi|lilongwe malawi*", tdx$location_clean,)] <- "malawi"
+tdx$location_clean[grep("^*malaysia|kuala lumpur malaysia|kuala lumpur*", tdx$location_clean,)] <- "malaysia"
+tdx$location_clean[grep("^mali$", tdx$location_clean,)] <- "mali"
+tdx$location_clean[grep("^*malta*", tdx$location_clean,)] <- "malta"
+tdx$location_clean[grep("^*marshall islands*", tdx$location_clean,)] <- "marshall islands"
+tdx$location_clean[grep("^*mauritania*", tdx$location_clean,)] <- "mauritania"
+tdx$location_clean[grep("^*mauritius|republic of mauritius*", tdx$location_clean,)] <- "mauritius"
+tdx$location_clean[grep("^*mexico|cdmx|guadalajara jalisco*", tdx$location_clean,)] <- "mexico"
+tdx$location_clean[grep("^*micronesia*", tdx$location_clean,)] <- "micronesia"
+tdx$location_clean[grep("^*moldova*", tdx$location_clean,)] <- "moldova"
+tdx$location_clean[grep("^*monaco*", tdx$location_clean,)] <- "monaco"
+tdx$location_clean[grep("^*mongolia|ulaanbaatar mongolia*", tdx$location_clean,)] <- "mongolia"
+tdx$location_clean[grep("^*montenegro*", tdx$location_clean,)] <- "montenegro"
+tdx$location_clean[grep("^*morocco*", tdx$location_clean,)] <- "morocco"
+tdx$location_clean[grep("^*mozambique*", tdx$location_clean,)] <- "mozambique"
+tdx$location_clean[grep("^*myanmar|rangoon myanmar|yangon myanmar*", tdx$location_clean,)] <- "myanmar"
+tdx$location_clean[grep("^*namibia|windhoek namibia*", tdx$location_clean,)] <- "namibia"
+tdx$location_clean[grep("^*nauru*", tdx$location_clean,)] <- "nauru"
+tdx$location_clean[grep("^*nepal|kathmandu*", tdx$location_clean,)] <- "nepal"
+tdx$location_clean[grep("^*netherlands|middelburg zeeland nl eu|haarlem|nederland|amsterdam|utrecht|holland|the hague|hague|the netherlands|rotterdam*", tdx$location_clean,)] <- "netherlands"
+tdx$location_clean[grep("^*new zealand|aotearoa|auckland|wellington|christchurch|dunedin|tauranga|rotorua*", tdx$location_clean,)] <- "new zealand"
+tdx$location_clean[grep("^*nicaragua*", tdx$location_clean,)] <- "nicaragua"
+tdx$location_clean[grep("^*niger*", tdx$location_clean,)] <- "niger"
+tdx$location_clean[grep("^*nigeria|lagos|abuja|kano nigeria|ibadan|federal capital territory nig*", tdx$location_clean,)] <- "nigeria"
+tdx$location_clean[grep("^*north korea*", tdx$location_clean,)] <- "north korea"
+tdx$location_clean[grep("^*north macedonia*", tdx$location_clean,)] <- "north macedonia"
+tdx$location_clean[grep("^*oman*", tdx$location_clean,)] <- "oman"
+tdx$location_clean[grep("^*pakistan|islamabad|karachi|lahore|punjab pakistan|peshawar pakistan*", tdx$location_clean,)] <- "pakistan"
+tdx$location_clean[grep("^*palestine*", tdx$location_clean,)] <- "palestine"
+tdx$location_clean[grep("^*panama*", tdx$location_clean,)] <- "panama"
+tdx$location_clean[grep("^*papua new guinea*", tdx$location_clean,)] <- "papua new guinea"
+tdx$location_clean[grep("^*paraguay*", tdx$location_clean,)] <- "paraguay"
+tdx$location_clean[grep("^*peru*", tdx$location_clean,)] <- "peru"
+tdx$location_clean[grep("^*philippines|central visayas republic of t|manila|republic of the philippines*", tdx$location_clean,)] <- "philippines"
+tdx$location_clean[grep("^*poland|warszawa polska|warsaw*", tdx$location_clean,)] <- "poland"
+tdx$location_clean[grep("^*portugal|lisbon portugal|lisbon|lisboa portugal|lisboa|porto portugal*", tdx$location_clean,)] <- "portugal"
+tdx$location_clean[grep("^*qatar|doha|doha qatar*", tdx$location_clean,)] <- "qatar"
+tdx$location_clean[grep("^*romania*", tdx$location_clean,)] <- "romania"
+tdx$location_clean[grep("^*russia|moscow russia*", tdx$location_clean,)] <- "russia"
+tdx$location_clean[grep("^*rwanda|kigali*", tdx$location_clean,)] <- "rwanda"
+tdx$location_clean[grep("^*saint kitts and nevis*", tdx$location_clean,)] <- "saint kitts and nevis"
+tdx$location_clean[grep("^*saint lucia*", tdx$location_clean,)] <- "saint lucia"
+tdx$location_clean[grep("^*saint vincent and the grenadines*", tdx$location_clean,)] <- "saint vincent and the grenadines"
+tdx$location_clean[grep("^*samoa*", tdx$location_clean,)] <- "samoa"
+tdx$location_clean[grep("^*san marino*", tdx$location_clean,)] <- "san marino"
+tdx$location_clean[grep("^*sao tome and principe*", tdx$location_clean,)] <- "sao tome and principe"
+tdx$location_clean[grep("^*saudi arabia|riyadh|kingdom of saudi arabia*", tdx$location_clean,)] <- "saudi arabia"
+tdx$location_clean[grep("^*senegal|dakar*", tdx$location_clean,)] <- "senegal"
+tdx$location_clean[grep("^*serbia|belgrade republic of serbia*", tdx$location_clean,)] <- "serbia"
+tdx$location_clean[grep("^*seychelles*", tdx$location_clean,)] <- "seychelles"
+tdx$location_clean[grep("^*sierra leone|freetown sierra leone*", tdx$location_clean,)] <- "sierra leone"
+tdx$location_clean[grep("^*singapore|central region singapore*", tdx$location_clean,)] <- "singapore"
+tdx$location_clean[grep("^*slovakia*", tdx$location_clean,)] <- "slovakia"
+tdx$location_clean[grep("^*slovenia|ljubljana slovenia*", tdx$location_clean,)] <- "slovenia"
+tdx$location_clean[grep("^*solomon islands|honiara solomon islands*", tdx$location_clean,)] <- "solomon islands"
+tdx$location_clean[grep("^*somalia*", tdx$location_clean,)] <- "somalia"
+tdx$location_clean[grep("^*south africa|johannesburg|pretoria|cape town south africa|cape town|durban south africa|bloemfontein south africa|bloemfontein|centurion south africa|centurion*", tdx$location_clean,)] <- "south africa"
+tdx$location_clean[grep("^*south korea|seoul|seoul republic of korea|corea del sur|korea|republic of korea*", tdx$location_clean,)] <- "south korea"
+tdx$location_clean[grep("^*south sudan*", tdx$location_clean,)] <- "south sudan"
+tdx$location_clean[grep("^*spain|barcelona|madrid|catalonia|catalunya|valencia spain|valencia*", tdx$location_clean,)] <- "spain"
+tdx$location_clean[grep("^*sri lanka|colombo sri lanka*", tdx$location_clean,)] <- "sri lanka"
+tdx$location_clean[grep("^*sudan*", tdx$location_clean,)] <- "sudan"
+tdx$location_clean[grep("^*suriname*", tdx$location_clean,)] <- "suriname"
+tdx$location_clean[grep("^*sweden|sverige|stockholm|uppsala|gothenburg sweden*", tdx$location_clean,)] <- "sweden"
+tdx$location_clean[grep("^*switzerland|berne switzerland|lausanne switzerland|geneva|schweiz|zurich|nyon switzerland|nyon|geneva zwitzerland *", tdx$location_clean,)] <- "switzerland"
+tdx$location_clean[grep("^*syria*", tdx$location_clean,)] <- "syria"
+tdx$location_clean[grep("^*taiwan*", tdx$location_clean,)] <- "taiwan"
+tdx$location_clean[grep("^*tajikistan*", tdx$location_clean,)] <- "tajikistan"
+tdx$location_clean[grep("^*tanzania|dar es salaam|arusha tanzania*", tdx$location_clean,)] <- "tanzania"
+tdx$location_clean[grep("^*thailand|bangkok*", tdx$location_clean,)] <- "thailand"
+tdx$location_clean[grep("^*timor leste*", tdx$location_clean,)] <- "timor leste"
+tdx$location_clean[grep("^*togo*", tdx$location_clean,)] <- "togo"
+tdx$location_clean[grep("^*tonga*", tdx$location_clean,)] <- "tonga"
+tdx$location_clean[grep("^*trinidad and tobago|trinidad tobago*", tdx$location_clean,)] <- "trinidad and tobago"
+tdx$location_clean[grep("^*tunisia*", tdx$location_clean,)] <- "tunisia"
+tdx$location_clean[grep("^*turkey|istanbul*", tdx$location_clean,)] <- "turkey"
+tdx$location_clean[grep("^*turkmenistan*", tdx$location_clean,)] <- "turkmenistan"
+tdx$location_clean[grep("^*tuvalu*", tdx$location_clean,)] <- "tuvalu"
+tdx$location_clean[grep("^*uganda|kampala uganda|kampalamuyenga|kampala|gulu uganda*", tdx$location_clean,)] <- "uganda"
+tdx$location_clean[grep("^*ukraine|kyiv ukraine|kyiv*", tdx$location_clean,)] <- "ukraine"
+tdx$location_clean[grep("^*united arab emirates|uae|dubai|abu dhabi*", tdx$location_clean,)] <- "uae"
+tdx$location_clean[grep("^*uruguay|montevideo uruguay*", tdx$location_clean,)] <- "uruguay"
+tdx$location_clean[grep("^*uzbekistan*", tdx$location_clean,)] <- "uzbekistan"
+tdx$location_clean[grep("^*vanuatu*", tdx$location_clean,)] <- "vanuatu"
+tdx$location_clean[grep("^*vatican city*", tdx$location_clean,)] <- "vatican city"
+tdx$location_clean[grep("^*venezuela|caracas venezuela|caracas*", tdx$location_clean,)] <- "venezuela"
+tdx$location_clean[grep("^*vietnam|hanoi vietnam*", tdx$location_clean,)] <- "vietnam"
+tdx$location_clean[grep("^*yemen*", tdx$location_clean,)] <- "yemen"
+tdx$location_clean[grep("^*zambia|lusaka zambia*", tdx$location_clean,)] <- "zambia"
+tdx$location_clean[grep("^*zimbabwe|harare|bulawayo zimbabwe*", tdx$location_clean,)] <- "zimbabwe"
+
+tdx$location_clean[grep("^*europe|european union|europa*", tdx$location_clean,)] <-"eu"
+sum <- tdx %>%
+  count(location_clean,sort = TRUE)
+toc()
+gc()
+```
+
+```{r}
+sum
+```
+
+
+```{r}
+#Deletes any location that has a number in it -22344 observations
+tdx <- tdx %>% filter(!grepl("[[:digit:]]", tdx$location_clean))
+gc()
+
+#emojis tried to be converted but not all emojis are unicode and there is no easy way of extraction because r, ascii, and unicode don't work well together.
+#td <- replace_emoji(td, emoji_dt = lexicon::hash_emojis)
+#gc()
+
+#deletes all non-eng charcters -77885 observations
+tdx <- tdx[which(!grepl("[^\x01-\x7F]+", tdx$location_clean)),]
+gc()
+
+#Removes problematic locations from the data. 
+tdx <- tdx[which(!grepl("springfield", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("global", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("earth", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("milky way", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("milkyway", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("planet earth", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("everywhere", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("somewhere", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("nowhere", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("here", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("mars", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("citizen of the world", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("world", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("sheher", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("hehim", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("theythem", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("she her", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("he him", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("they them", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("blackpink", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("gaia", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("antarctica", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("home", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("hell", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("the north", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("the commonwealth", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("in your area", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("internet", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("broken britain", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("in your heart", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("united nations", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("all over the place", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("dogood with every transaction", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("no planet b", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("alcatraz", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("a pale blue dot", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("pale blue dot", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("the universe", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("swindonsewagefascistplagueuk", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("burnt arse end of planet", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("above the maginot line", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("home sweet home", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("the eye of the storm", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("in your dreams", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("around", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("asia pacfic", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("international", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("plague island", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("climatebreakdown", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("universe", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("online", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("metaverse ", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("dyslexia", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("unknown", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("asia pacific", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("up north", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("atlantismostly", tdx$location_clean)),]
+tdx <- tdx[which(!grepl("behind you|our bloodlines|neverland|space| gods country|wonderland|moon|nationwide|shethey|nofixedaddress|never ask it may surprise you|nofixedaddress|currently in edwardian mood|national|pnw|left my n n o|north east|,y space|msi algorithmicsurvivor|digital activist|only blink|the western front|utopia|way up n but not all the way|oldmagic town|the beach|south coast|limbo|freeassange|crowd|oz|server|asia|con lisa|metaverse|jenchulichaeng|our blood lines|gods country|pacific northwest|pacific north west bc|sky poker obviously|east africa|carrick near rtbs castle|caribbean", tdx$location_clean)),]
+tdx <- tdx %>% mutate_all(na_if,"")
+tdx <- drop_na(tdx)
+```
+
+```{r}
+sum2 <- tdx %>%
+  count(location_clean,sort = TRUE) 
+gc()
+```
+
+```{r}
+tdx<-merge(x=tdx,y=sum2,by="location_clean",all.x=TRUE)
+```
+
+```{r}
+#creates a cut off for locations with more than x number of tweets. 
+tdx <- tdx[which(tdx$n >= 90),]
+count <- unique(tdx$location_clean)
+sum2 <- tdx %>%
+  count(location_clean,sort = TRUE) 
+sum2
+```
+
+```{r}
+tdx$continent <- countrycode(sourcevar = tdx[, "location_clean"],
+                            origin = "country.name",
+                            destination = "continent")
+tdx$continent[tdx$location_clean == "eu"] <- "Europe"
+tdx$continent[tdx$location_clean == "kosovo"] <- "Europe"
+tdx$continent[tdx$location_clean == "africa"] <- "Africa"
+```
+
+```{r}
+countcont <- unique(tdx$continent)
+sumcont <- tdx %>%
+  count(continent,sort = TRUE) 
+sumcont
+```
+
+```{r}
+tdx <- tdx %>% relocate(location_clean, .after = profile_location)
+```
+
+```{r}
+twitterdata <- tdx
+save(twitterdata, file="tweets_location.rda")
+```
+
+```{r}
+r1 <- sample_n(twitterdata, 100)
+```
+

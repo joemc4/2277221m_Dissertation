@@ -1,0 +1,726 @@
+---
+title: "topic moddeling"
+author: "Joseph McMillan"
+date: "2022-08-15"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error=F,  message=F, warning=F)
+# Clears workspace so I don't have to do it manually
+rm(list = ls())
+# Clears all plotts so I don't have to do it manually 
+graphics.off()
+# Clears console so I don't have to do it manually
+cat("\014")
+#drops sci not
+options(scipen=999)
+```
+
+```{r}
+library(tidyverse)
+library(parallel)
+library(pander)
+library(lubridate)
+library(maps)
+library(geosphere)
+library(countrycode)
+library(hrbrthemes)
+library(reshape2)
+library(fastDummies)
+library(NLP)
+library(tm)
+library(topicmodels)
+library(textclean)
+library(tictoc)
+library(vader)
+library(Twitmo)
+library(tidytext)
+library(ldatuning)
+library(SnowballC)
+library(wordcloud)
+library(viridis)
+```
+
+```{r, include=FALSE}
+setwd("~/Documents/UA/DISSO/Data_code")
+```
+
+```{r}
+load("data_dtm.rda")
+load("data_dtm_final.rda")
+load("data_dtm_trim.rda")
+load("data_tidy.rda")
+load("gamma_df.rda")
+load("topic_n.rda")
+load("tweet_top_terms.rda")
+load("tweets_lda.rda")
+load("td_final_sent.rda")
+gc()
+```
+
+```{r}
+tweet_top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = F) +
+  facet_wrap(~ topic, scales = "free", labeller = labeller(topic = 
+    c("1" = "The Future",
+      "2" = "Young People",
+      "3" = "Mia Mottley + Inequality",
+      "4" = "Private Jets",
+      "5" = "#5",
+      "6" = "#6",
+      "7" = "Coal & Oil Power/Industry",
+      "8" = "2030",
+      "9" = "High Profile Guests",
+      "10" = "#10",
+      "11" = "#11",
+      "12" = "#12",
+      "13" = "Attenborough"))) +
+  labs(title = "Topics Extracted via LDA Model",
+       subtitle = "350,095 tweets ommitted",
+       x = "",
+       y = "",
+       fill="",
+       caption = "Source: Twitter API") +
+  coord_flip() +
+  scale_x_reordered()
+```
+```{r}
+td_final$topic_rename <- td_final$topic
+td_final$topic_rename[grep("^1$", td_final$topic_rename,)] <- "The Future"
+td_final$topic_rename[grepl("^2$", td_final$topic_rename,)] <- "Young People"
+td_final$topic_rename[grepl("^3$", td_final$topic_rename,)] <- "Mia Mottley + Inequality"
+td_final$topic_rename[grepl("^4$", td_final$topic_rename,)] <- "Private Jets"
+td_final$topic_rename[grepl("^5$", td_final$topic_rename,)] <- "#5"
+td_final$topic_rename[grepl("^6$", td_final$topic_rename,)] <- "#6"
+td_final$topic_rename[grepl("^7$", td_final$topic_rename,)] <- "Coal & Oil Power/Industry"
+td_final$topic_rename[grepl("^8$", td_final$topic_rename,)] <- "2030"
+td_final$topic_rename[grepl("^9$", td_final$topic_rename,)] <- "High Profile Guests"
+td_final$topic_rename[grepl("^10$", td_final$topic_rename,)] <- "#10"
+td_final$topic_rename[grepl("^11$", td_final$topic_rename,)] <- "#11"
+td_final$topic_rename[grepl("^12$", td_final$topic_rename,)] <- "#12"
+td_final$topic_rename[grepl("^13$", td_final$topic_rename,)] <- "Attenborough"
+```
+
+```{r, TM line topic models, echo=FALSE}
+df2 <- td_final %>% select(topic)
+df2 <- fastDummies::dummy_cols(df2, select_columns = "topic")
+df2 <- df2 %>% select(-topic, -topic_NA)
+df1 <- td_final %>% select(created_at)
+top_tab <- cbind(df1, df2)
+top_tab <- top_tab %>% drop_na() %>% group_by(created_at) %>% summarise_all(funs(sum)) 
+top_tabx <- melt(top_tab, id.vars = "created_at")
+top_taby <- top_tabx 
+
+top_tabx <- subset(top_tabx, variable != "topic_5")
+top_tabx <- subset(top_tabx, variable != "topic_6")
+top_tabx <- subset(top_tabx, variable != "topic_10")
+top_tabx <- subset(top_tabx, variable != "topic_11")
+top_tabx <- subset(top_tabx, variable != "topic_12")
+```
+
+```{r}
+top_tabx <- top_tabx %>% rename("Topics" = variable)
+```
+
+```{r}
+list2env(split(td_final, td_final$topic), envir=.GlobalEnv)
+```
+
+```{r}
+`t01text` <- `1`$text
+`t02text` <- `2`$text
+`t03text` <- `3`$text
+`t04text` <- `4`$text
+`t05text` <- `5`$text
+`t06text` <- `6`$text
+`t07text` <- `7`$text
+`t08text` <- `8`$text
+`t09text` <- `9`$text
+`t10text` <- `10`$text
+`t11text` <- `11`$text
+`t12text` <- `12`$text
+`t13text` <- `13`$text
+```
+
+```{r, TM word clouds by topic, out.width='40%', fig.show='hold', echo=F}
+wordcloud(`t01text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t02text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t03text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 26)
+wordcloud(`t04text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t05text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t06text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t07text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t08text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t09text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t10text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t11text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t12text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+wordcloud(`t13text`,min.freq = 10,colors=brewer.pal(8, "Dark2"),random.color = TRUE,max.words = 25)
+```
+
+```{r}
+top_tab <- top_tab %>% drop_na() %>% group_by(created_at) %>% summarise_all(funs(sum)) 
+
+top_tab %>% pander(split.table = 120, style = 'rmarkdown', 
+         caption = 'Sum. of Topics By Day')
+```
+
+```{r}
+tob_rename <- top_tabx
+```
+
+```{r}
+tob_rename$Topics <- as.character(tob_rename$Topics)
+tob_rename$Topics[grep("^topic_1$", tob_rename$Topics,)] <- "The Future"
+tob_rename$Topics[grepl("^topic_2$", tob_rename$Topics,)] <- "Young People"
+tob_rename$Topics[grepl("^topic_3$", tob_rename$Topics,)] <- "Mia Mottley + Inequality"
+tob_rename$Topics[grepl("^topic_4$", tob_rename$Topics,)] <- "Private Jets"
+tob_rename$Topics[grepl("^topic_5$", tob_rename$Topics,)] <- "#5"
+tob_rename$Topics[grepl("^topic_6$", tob_rename$Topics,)] <- "#6"
+tob_rename$Topics[grepl("^topic_7$", tob_rename$Topics,)] <- "Coal & Oil Power/Industry"
+tob_rename$Topics[grepl("^topic_8$", tob_rename$Topics,)] <- "2030"
+tob_rename$Topics[grepl("^topic_9$", tob_rename$Topics,)] <- "High Profile Guests"
+tob_rename$Topics[grepl("^topic_10$", tob_rename$Topics,)] <- "#10"
+tob_rename$Topics[grepl("^topic_11$", tob_rename$Topics,)] <- "#11"
+tob_rename$Topics[grepl("^topic_12$", tob_rename$Topics,)] <- "#12"
+tob_rename$Topics[grepl("^topic_13$", tob_rename$Topics,)] <- "Attenborough"
+```
+
+```{r}
+tob_rename %>% 
+  filter(Topics != "The Future") %>%
+  filter(Topics != "Young People") %>%
+  filter(Topics != "Private Jets") %>%
+  filter(Topics != "#5") %>%
+  filter(Topics != "#6") %>%
+  filter(Topics != "Coal & Oil Power/Industry") %>%
+  filter(Topics != "2030") %>% 
+  filter(Topics != "High Profile Guests") %>%
+  filter(Topics != "#10") %>% 
+  filter(Topics != "#11") %>%
+  filter(Topics != "#12") %>%
+  ggplot(aes(tob_rename, x = created_at , y = value, colour = Topics, linetype=Topics)) +
+  scale_fill_viridis_d() +
+  geom_line() +
+  geom_point() +
+ labs(title = "Topic Movement During COP26",
+      subtitle = "Topic 3 (Mia Mottley + Inequality) and 13 (Attenbourough)",
+      x = "Day",
+      y = "Topic Score",
+      caption = "Source: Twitter API",
+      breaks=c("topic_3", "topic_13"),
+      labels=c("Mia Mottley + Inequality", "Attenborough"))
+
+tob_rename %>% 
+  filter(Topics =="The Future") %>%
+  
+  ggplot(aes(tob_rename, x = created_at , y = value, colour = Topics)) + 
+    scale_fill_viridis_d() +
+  geom_line() + 
+  geom_point() +
+   theme(legend.position = "") +
+ labs(title = "Topic Movement During COP26",
+      subtitle = "Topic 1 (The Future)",
+      x = "Day",
+      y = "Topic Score",
+      fill = "Topics",
+      caption = "Source: Twitter API") +
+  scale_color_discrete((name = "Topics"))
+
+tob_rename %>% 
+  filter(Topics =="Young People") %>%
+  ggplot(aes(tob_rename, x = created_at , y = value, colour = Topics)) + 
+    scale_fill_viridis_d() +
+  geom_line() + 
+  geom_point() +
+   theme(legend.position = "") +
+ labs(title = "Topic Movement During COP26",
+      subtitle = "Topic 2 (Young People)",
+      x = "Day",
+      y = "Topic Score",
+      fill = "Topics",
+      caption = "Source: Twitter API") +
+scale_color_discrete((name = "Topics"))
+
+tob_rename %>% 
+  filter(Topics =="Private Jets") %>%
+  ggplot(aes(tob_rename, x = created_at , y = value, colour = Topics)) + 
+    scale_fill_viridis_d() +
+  geom_line() + 
+  geom_point() +
+   theme(legend.position = "") +
+ labs(title = "Topic Movement During COP26",
+      subtitle = "Topic 4 (Private Jets)",
+      x = "Day",
+      y = "Topic Score",
+      fill = "Topics",
+      caption = "Source: Twitter API") +
+scale_color_discrete((name = "Topics"))
+
+tob_rename %>% 
+  filter(Topics =="Coal & Oil Power/Industry") %>%
+  ggplot(aes(tob_rename, x = created_at , y = value, colour = Topics)) + 
+    scale_fill_viridis_d() +
+  geom_line() + 
+  geom_point() +
+   theme(legend.position = "") +
+ labs(title = "Topic Movement During COP26",
+      subtitle = "Topic 7 (Coal & Oil power/ Industry)",
+      x = "Day",
+      y = "Topic Score",
+      fill = "Topics",
+      caption = "Source: Twitter API") +
+scale_color_discrete((name = "Topics"))
+
+tob_rename %>% 
+  filter(Topics =="2030") %>%
+  ggplot(aes(tob_rename, x = created_at , y = value, colour = Topics)) +
+    scale_fill_viridis_d() +
+  geom_line() + 
+  geom_point() +
+   theme(legend.position = "") +
+ labs(title = "Topic Movement During COP26",
+      subtitle = "Topic 8 (2030)",
+      x = "Day",
+      y = "Topic Score",
+      fill = "Topics",
+      caption = "Source: Twitter API") +
+scale_color_discrete((name = "Topics"))
+
+tob_rename %>% 
+  filter(Topics =="High Profile Guests") %>%
+  ggplot(aes(tob_rename, x = created_at , y = value, colour = Topics)) + 
+    scale_fill_viridis_d() +
+  geom_line() + 
+  geom_point() +
+   theme(legend.position = "") +
+ labs(title = "Topic Movement During COP26",
+      subtitle = "Topic 9 (High Profile Guests)",
+      x = "Day",
+      y = "Topic Score",
+      fill = "Topics",
+      caption = "Source: Twitter API") +
+scale_color_discrete((name = "Topics"))
+
+
+tob_rename %>% 
+  ggplot(aes(tob_rename, x = created_at , y = value, colour = Topics, linetype=Topics)) + 
+    scale_fill_viridis_d() +
+  geom_line() + 
+  geom_point() +
+ labs(title = "Topic Movement During COP26",
+      subtitle = "Topic 5, 6, 10, 11, & 12 Removed",
+      x = "Day",
+      y = "Topic Score",
+      fill = "Topics",
+      caption = "Source: Twitter API") +
+  scale_color_discrete((name = "Topics"))
+```
+
+```{r}
+topic_tab  <-  table(td_final$topic)
+topic_tab <- as.data.frame(topic_tab)
+topic_tab %>% pander(split.table = 120, style = 'rmarkdown', 
+         caption = 'Topic Model Totals for COP26')
+
+top_tabc <- subset(topic_tab, Var1 != 6)
+top_tabc <- subset(top_tabc, Var1 != 11)
+```
+
+```{r}
+top_tabc %>% 
+    filter(Var1 !="5") %>%
+    filter(Var1 !="6") %>%
+    filter(Var1 !="10") %>%
+    filter(Var1 !="11") %>%
+    filter(Var1 !="12") %>%
+  ggplot(aes(Var1, Freq)) +
+   geom_bar(aes(fill = Var1), stat = "identity") +
+  theme(legend.position = "") +
+    labs(title = "Topic Frequency for COP26: Overall",
+      subtitle = "Topic 5, 6, 10, 11, 12 & NAs removed",
+      x = "Topics",
+      y = "Topics appearing in Tweets",
+      fill = "Topics",
+      caption = "Source: Twitter API") + 
+scale_color_discrete((name = "Topics"))
+```
+
+```{r}
+td_final$topic <- as.character(td_final$topic)
+td_final %>% 
+  ggplot(aes(created_at, fill = topic_rename)) +
+  geom_histogram(stat = 'count',colour = 'black', position = 'fill') +
+    labs(title = "Topic Frequency for COP26: Daily",
+      subtitle = "Topic 5, 6, 10, 11, 12, & NAs included",
+      x = "Topics",
+      y = "Topic Distrubution in Tweets",
+      fill = "Topics",
+      caption = "Source: Twitter API")
+
+td_final %>% drop_na() %>%
+  filter(topic !=5) %>%
+  filter(topic !=6) %>% 
+  filter(topic !=10) %>%
+  filter(topic !=11) %>%
+  filter(topic !=12) %>%
+  ggplot(aes(created_at, fill = topic_rename)) +
+  geom_histogram(stat = 'count',colour = 'black', position = 'fill') + 
+  labs(title = "Topic Frequency for COP26: Daily",
+      subtitle = "Topic 5, 6, 10, 11, 12 & NAs removed",
+      x = "Topics",
+      y = "Topic Distrubution in Tweets",
+      fill = "Topics",
+      caption = "Source: Twitter API")
+
+```
+
+```{r}
+td_final %>% 
+  ggplot(aes(continent, fill = topic_rename)) +
+  geom_histogram(stat = 'count',colour = 'black', position = 'fill') +
+    labs(title = "Topic Frequency for COP26: Continent ",
+      subtitle = "Topic 5, 6, 10, 11, 12, & NAs Included",
+      x = "Topics",
+      y = "Topic Distrubution in Tweets",
+      fill = "Topics",
+      caption = "Source: Twitter API")
+
+td_final %>% drop_na() %>%
+  filter(topic !=5) %>%
+  filter(topic !=6) %>% 
+  filter(topic !=10) %>%
+  filter(topic !=11) %>%
+  filter(topic !=12) %>%
+  ggplot(aes(continent, fill = topic_rename)) +
+  geom_histogram(stat = 'count',colour = 'black', position = 'fill') +
+    labs(title = "Topic Frequency for COP26: Continent ",
+      subtitle = "Topic 5, 6, 10, 11, 12 & NAs removed",
+      x = "Topics",
+      y = "Topic Distrubution in Tweets",
+      fill = "Topics",
+      caption = "Source: Twitter API")
+```
+
+```{r}
+top10_list <- c("uk","usa","australia","india", "canada","germany","ireland", "kenya", "france", "belgium")
+td_top10 <- subset(td_final, location_clean %in% top10_list)
+```
+
+```{r}
+td_top10 %>% 
+  ggplot(aes(location_clean, fill = topic_rename)) +
+  geom_histogram(stat = 'count',colour = 'black', position = 'fill') +
+    labs(title = "Topic Frequency for COP26: Country ",
+      subtitle = "Topic 5, 6, 10, 11, 12, & NAs Included",
+      x = "Topics",
+      y = "Topic Distrubution in Tweets",
+      fill = "Topics",
+      caption = "Source: Twitter API")
+
+td_top10 %>% drop_na() %>%
+  filter(topic !=5) %>%
+  filter(topic !=6) %>% 
+  filter(topic !=10) %>%
+  filter(topic !=11) %>%
+  filter(topic !=12) %>%
+  ggplot(aes(location_clean, fill = topic_rename)) +
+  geom_histogram(stat = 'count',colour = 'black', position = 'fill') +
+    labs(title = "Topic Frequency for COP26: Country",
+      subtitle = "Topic 5, 6, 10, 11, 12 & NAs removed",
+      x = "Topics",
+      y = "Topic Distrubution in Tweets",
+      fill = "Topics",
+      caption = "Source: Twitter API")
+```
+
+```{r}
+topic_count <- td_final %>% drop_na() %>% 
+    group_by(location_clean) %>% 
+    count(topic) %>% 
+    slice(which.max(n)) %>% 
+    select(-n)
+```
+
+```{r}
+region <- c("uk", "usa", "australia", "ireland", "china", "india", "france", "germany", "canada", "afghanistan", "albania", "algeria", "andorra", "angola", "antigua and barbuda", "argentina", "armenia", "austria", "azerbaijan", "bahamas", "bahrain", "bangladesh", "barbados", "belarus", "belgium", "belize", "benin", "bhutan", "bolivia", "bosnia and herzegovina", "botswana", "brazil", "brunei", "bulgaria", "burkina faso", "burundi", "cabo verde", "cambodia", "cameroon", "central african republic", "chad", "chile", "colombia", "comoros", "congo", "costa rica", "ivory coast", "croatia", "cuba", "cyprus", "czech republic", "denmark", "djibouti", "dominica", "dominican republic", "ecuador", "egypt", "el salvador", "equatorial guinea", "eritrea", "estonia", "eswatini", "ethiopia", "fiji", "finland", "gabon", "gambia", "georgia", "ghana", "greece", "grenada", "guatemala", "guinea", "guinea bissau", "guyana", "haiti", "honduras", "hungary", "iceland", "indonesia", "iran", "iraq", "israel", "italy", "jamaica", "japan", "jordan", "kazakhstan", "kenya", "kiribati", "kosovo", "kuwait", "kyrgyzstan", "laos", "latvia", "lebanon", "lesotho", "liberia", "libya", "liechtenstein", "lithuania", "luxembourg", "madagascar", "malawi", "malaysia", "mali", "malta", "marshall islands", "mauritania", "mauritius", "mexico", "micronesia", "moldova", "monaco", "mongolia", "montenegro", "morocco", "mozambique", "myanmar", "namibia", "nauru", "nepal", "netherlands", "new zealand", "nicaragua", "niger", "nigeria", "north korea", "north macedonia", "norway", "oman", "pakistan", "palau", "palestine", "panama", "papua new guinea", "paraguay", "peru", "philippines", "poland", "portugal", "qatar", "romania", "russia", "rwanda", "saint kitts and nevis", "saint lucia", "saint vincent and the grenadines", "samoa", "san marino", "sao tome and principe", "saudi arabia", "senegal", "serbia", "seychelles", "sierra leone", "singapore", "slovakia", "slovenia", "somalia", "south africa", "south korea", "south sudan", "spain", "sri lanka", "sudan", "suriname", "sweden", "switzerland", "syria", "taiwan", "tajikistan", "tanzania", "thailand", "timor leste", "togo", "tonga", "trinidad and tobago", "tunisia", "turkey", "turkmenistan", "tuvalu", "uganda", "ukraine", "uae", "uruguay", "uzbekistan", "vanuatu", "vatican city", "venezuela", "vietnam", "yemen", "zambia", "zimbabwe", "solomon islands", "maldives", "democratic republic of the congo","republic of the congo", "eswatini")
+region <- sort(region)
+tweeted_map <- map_data("world", region = region)
+region <- as.data.frame(region)
+
+
+bx <- td_final %>% select(location_clean,n)
+cx <- c(unique(td_final$location_clean))
+cx <- sort(cx)
+cx <- as.data.frame(cx)
+ctx <- region %>% mutate(cv = region %in% cx$cx)
+names(topic_count)[1] <- "region"
+ctx <-merge(x=ctx,y=topic_count,by="region",all.x=TRUE)
+tweeted_map <- map_data("world", region = ctx$region)
+```
+
+```{r}
+region.lab.data <- tweeted_map %>%
+  group_by(region) %>%
+  summarise(long = mean(long), lat = mean(lat), cv=ctx$cv)
+```
+
+```{r}
+rl <- tweeted_map$region
+rl <- tolower(rl)
+tweeted_map$region <- rl
+tweeted_map2<-merge(x=tweeted_map,y=ctx,by="region",all.x=TRUE)
+
+tweeted_map2 <- arrange(tweeted_map2, order)
+```
+
+```{r, echo=F}
+tweeted_map2xx <-  left_join(tweeted_map, topic_count, by = "region")
+
+tweeted_map2xx$topic[grep("^1$", tweeted_map2xx$topic,)] <- "The Future"
+tweeted_map2xx$topic[grepl("^2$", tweeted_map2xx$topic,)] <- "Young People"
+tweeted_map2xx$topic[grepl("^3$", tweeted_map2xx$topic,)] <- "Mia Mottley + Inequality"
+tweeted_map2xx$topic[grepl("^4$", tweeted_map2xx$topic,)] <- "Private Jets"
+tweeted_map2xx$topic[grepl("^5$", tweeted_map2xx$topic,)] <- "#5"
+tweeted_map2xx$topic[grepl("^6$", tweeted_map2xx$topic,)] <- "#6"
+tweeted_map2xx$topic[grepl("^7$", tweeted_map2xx$topic,)] <- "Coal & Oil Power/Industry"
+tweeted_map2xx$topic[grepl("^8$", tweeted_map2xx$topic,)] <- "2030"
+tweeted_map2xx$topic[grepl("^9$", tweeted_map2xx$topic,)] <- "High Profile Guests"
+tweeted_map2xx$topic[grepl("^10$", tweeted_map2xx$topic,)] <- "#10"
+tweeted_map2xx$topic[grepl("^11$", tweeted_map2xx$topic,)] <- "#11"
+tweeted_map2xx$topic[grepl("^12$", tweeted_map2xx$topic,)] <- "#12"
+tweeted_map2xx$topic[grepl("^13$", tweeted_map2xx$topic,)] <- "Attenborough"
+```
+
+```{r}
+tweeted_map2xx %>%
+ggplot(aes(x = long, y = lat)) +
+  geom_polygon(aes(group = group , fill = topic)) +
+  geom_text(aes(label =""), data = region.lab.data,  size = 3, hjust = 0.5)+
+  theme(legend.position = "bottom") +
+  labs(title = "Most Prevalant Topic by Country",
+      subtitle = "All 13 Topics and NAs",
+      x = "",
+      caption = "Source: TwitterAPI",
+      fill="More Than 90 Tweets Per Location",
+      y = "")
+gc()
+```
+
+```{r}
+tweeted_map2xx <- tweeted_map2xx %>%
+  mutate(topic = na_if(topic, "#5"))
+tweeted_map2xx <- tweeted_map2xx %>%
+  mutate(topic = na_if(topic, "#6"))
+tweeted_map2xx <- tweeted_map2xx %>%
+  mutate(topic = na_if(topic, "#10"))
+tweeted_map2xx <- tweeted_map2xx %>%
+  mutate(topic = na_if(topic, "#11"))
+tweeted_map2xx <- tweeted_map2xx %>%
+  mutate(topic = na_if(topic, "#12"))
+```
+
+```{r, echo=F}
+tweeted_map2xx %>%
+ggplot(aes(x = long, y = lat)) +
+  geom_polygon(aes(group = group , fill = topic)) +
+  geom_text(aes(label =""), data = region.lab.data,  size = 3, hjust = 0.5)+
+  theme(legend.position = "right") +
+  labs(title = "Most Prevalant Topic by Country",
+      subtitle = "Topic 5, 6, 10, 11 & 12 Included as NAs",
+      x = "",
+      caption = "Source: TwitterAPI",
+      fill="More Than 90 Tweets Per Location",
+      y = "")
+gc()
+```
+
+```{r}
+`1tab` <- `1` %>% group_by(created_at) %>% count(vader_sum) 
+
+`1tab` %>% 
+  ggplot(aes(`1tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 1 - The Future ",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`2tab` <- `2` %>% group_by(created_at) %>% count(vader_sum) 
+
+`2tab` %>% 
+  ggplot(aes(`2tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 2 - Young people",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`3tab` <- `3` %>% group_by(created_at) %>% count(vader_sum) 
+
+`3tab` %>% 
+  ggplot(aes(`3tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 3 - Mia Mottley + Inequality ",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`4tab` <- `4` %>% group_by(created_at) %>% count(vader_sum) 
+
+`4tab` %>% 
+  ggplot(aes(`4tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 4 - Private Jets ",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`5tab` <- `5` %>% group_by(created_at) %>% count(vader_sum) 
+
+`5tab` %>% 
+  ggplot(aes(`5tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 5 - #5 ",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`6tab` <- `6` %>% group_by(created_at) %>% count(vader_sum) 
+
+`6tab` %>% 
+  ggplot(aes(`6tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 6 - #6 ",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`7tab` <- `7` %>% group_by(created_at) %>% count(vader_sum) 
+
+`7tab` %>% 
+  ggplot(aes(`7tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 7 - Coal & Oil Power/Industry ",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`8tab` <- `8` %>% group_by(created_at) %>% count(vader_sum) 
+
+`8tab` %>% 
+  ggplot(aes(`8tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 8 - 2030 ",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`9tab` <- `9` %>% group_by(created_at) %>% count(vader_sum) 
+
+`9tab` %>% 
+  ggplot(aes(`9tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 9 - High Profile Guests ",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`10tab` <- `10` %>% group_by(created_at) %>% count(vader_sum) 
+
+`10tab` %>% 
+  ggplot(aes(`10tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 10 - #10",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`11tab` <- `11` %>% group_by(created_at) %>% count(vader_sum) 
+
+`11tab` %>% 
+  ggplot(aes(`11tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 11 - #11",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`12tab` <- `12` %>% group_by(created_at) %>% count(vader_sum) 
+
+`12tab` %>% 
+  ggplot(aes(`1tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 12 - #12 ",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+
+`13tab` <- `13` %>% group_by(created_at) %>% count(vader_sum) 
+
+`13tab` %>% 
+  ggplot(aes(`13tab`, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line Chart: Sentiment Score by Day - 31/10/2021 - 05/11/2021",
+       subtitle = " Topic 13 - Attenborough ",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      )
+```
+

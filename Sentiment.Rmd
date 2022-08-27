@@ -1,0 +1,202 @@
+---
+title: "Sentiment"
+author: "Joseph McMillan"
+date: "2022-07-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error=F,  message=F, warning=F)
+# Clears workspace so I don't have to do it manually
+rm(list = ls())
+# Clears all plotts so I don't have to do it manually 
+graphics.off()
+# Clears console so I don't have to do it manually
+cat("\014")
+#drops sci not
+options(scipen=999)
+```
+
+```{r}
+library(tidyverse)
+library(NLP)
+library(tm)
+library(topicmodels)
+library(textclean)
+library(tictoc)
+library(vader)
+library(Twitmo)
+library(tidytext)
+library(ldatuning)
+library(SnowballC)
+```
+
+```{r}
+load("~/Documents/UA/DISSO/Data_code/td_vader.rda")
+```
+
+```{r}
+all_stops2 <- c("live","news","event","across","make","made","join","read","keep","help","work","full","part","opening","welcome","summit","port","part","first","last","meet","made", "hope", "stop","real","world","leaders")
+
+fulltext <- td$textclean
+fulltext <- fulltext %>% removeWords(all_stops2)
+fulltext<- gsub("climate change", "climate_change", fulltext)
+fulltext<- gsub("climate crisis", "climate_crisis", fulltext)
+fulltext<- gsub("climate change", "climate_change", fulltext)
+fulltext<- gsub("david attenborough", "david_attenborough", fulltext)
+fulltext<- gsub("climate conference", "climate_conference", fulltext)
+fulltext<- gsub("boris johnson", "boris_johnson", fulltext)
+fulltext<- gsub("united nations", "united_nations", fulltext)
+fulltext<- gsub(" $", "", fulltext)
+fulltext<- gsub("^ +| +$|( ) +", "\\1", fulltext)
+fulltext<- gsub("  ", " ", fulltext)
+fulltext<- gsub("   ", " ", fulltext)
+fulltext<- gsub("^ +| +$|( ) +", "\\1", fulltext)
+td$textclean <- fulltext
+
+```
+
+```{r}
+sec1start <- Sys.time()
+tic()
+#put data into tidy text format - note we use 'token = 'tweets'' for twitter-specific text preprocessing
+data_tidy <- td %>% 
+   unnest_tokens(word, textclean, token = "tweets") 
+  #mutate(word = SnowballC::wordStem(word))
+
+gc()
+```
+
+```{r}
+countwords <- data_tidy %>% 
+count(word, sort = TRUE)
+```
+
+
+```{r}
+data_dtm <- data_tidy %>%
+  # get count of each token in each document
+  count(id, word) %>%
+  # create a document-term matrix with all features and tfidf weighting
+  cast_dtm(document = id, term = word, value = n, weighting = tm::weightTf)
+
+# view
+data_dtm
+
+# remove sparse terms
+data_dtm_trim <- removeSparseTerms(data_dtm, sparse = .99)
+data_dtm_trim
+
+# we need to get rid of rows with none of the non-sparse terms
+rowTotals <- apply(data_dtm_trim, 1, sum) #Find the sum of words in each Document
+data_dtm_final <- data_dtm_trim[rowTotals> 0, ] 
+gc()
+```
+
+```{r}
+topic_n <- FindTopicsNumber(
+  data_dtm_final,
+  topics = seq(10, 20, by = 1),
+  metrics = c("Griffiths2004", "CaoJuan2009"),
+  method = "Gibbs",
+  control = list(seed = 1234),
+  mc.cores = 8,
+  return_models = FALSE,
+  verbose = TRUE,
+  libpath = NULL)
+```
+
+```{r}
+# plot result
+FindTopicsNumber_plot(topic_n)
+```
+```{r}
+sec1end <- Sys.time()
+toc()
+```
+
+```{r}
+save(data_dtm, file = "data_dtm.rda")
+save(data_dtm_final, file = "data_dtm_final.rda")
+save(data_dtm_trim, file = "data_dtm_trim.rda")
+save(data_tidy, file = "data_tidy.rda")
+save(topic_n, file = "topic_n.rda")
+save(rowTotals, file = "rowtotals.rda")
+gc()
+```
+
+```{r}
+sec2start <- Sys.time()
+tic()
+#create topic model with x topics
+tweets_lda <- LDA(data_dtm_final,
+                  method = "Gibbs",
+                  mc.cores = 8, 
+                  k = 13, 
+                  control = list(seed = 1234, 
+                                 verbose = TRUE, 
+                                 best = T))
+save(tweets_lda, file="tweets_lda.rda")
+
+# get the beta values for each word, which attribute each word a probability for each topic
+tweet_topics <- tidy(tweets_lda, matrix = "beta")
+save(tweet_topics, file="tweets_topics.rda")
+# make dataframe showcasing the 10 words with highest beta per topic
+tweet_top_terms <- tweet_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+# plot top words for each topic
+tweet_top_terms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = F) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() +
+  scale_x_reordered()
+sec2end <- Sys.time()
+toc()
+```
+```{r}
+gc()
+```
+
+```{r}
+# pull out gamma values per tweet per topic
+gamma_document <- tidy(tweets_lda, matrix = "gamma")
+
+# as an example, we can look at a tweet with the highest gamma for a topic.
+tweet_example <- sample_n(gamma_document, 1) %>% print()
+```
+
+```{r}
+gamma_df <- as.data.frame(gamma_document)
+gamma_df$document <- as.character(gamma_df$document)
+gamma_df <- gamma_df %>%
+    group_by(document) %>%
+    slice(which.max(gamma))
+td$topic <- ifelse(td$id == 'dummy', 1, 0)
+gamma_df <- gamma_df %>% rename("id" = document)
+save(gamma_df, file = 'gamma.rda')
+td_final<- left_join(td, gamma_df, by = c("id"))
+
+td_final <- td_final %>% select(-c(topic.x))
+td_final <- td_final %>% rename("topic" = topic.y)
+```
+
+```{r}
+gc()
+save(data_dtm, file = "data_dtm.rda")
+save(data_dtm_final, file = "data_dtm_final.rda")
+save(data_dtm_trim, file = "data_dtm_trim.rda")
+save(data_tidy, file = "data_tidy.rda")
+save(gamma_df, file = "gamma_df.rda")
+save(data_tidy, file = "data_dtm_trim.rda")
+save(topic_n, file = "topic_n.rda")
+save(tweet_top_terms, file = "tweet_top_terms.rda")
+save(tweets_lda, file = "tweets_lda.rda")
+save(td_final, file = "td_final.rda")
+```
+

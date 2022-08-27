@@ -1,0 +1,96 @@
+---
+title: "Vader"
+author: "Joseph McMillan"
+date: "2022-07-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error=F,  message=F, warning=F)
+# Clears workspace so I don't have to do it manually
+rm(list = ls())
+# Clears all plotts so I don't have to do it manually 
+graphics.off()
+# Clears console so I don't have to do it manually
+cat("\014")
+#drops sci not
+options(scipen=999)
+```
+
+```{r}
+library(tidyverse)
+library(NLP)
+library(tm)
+library(textclean)
+library(tictoc)
+library(vader)
+library(Twitmo)
+```
+
+```{r}
+load("~/Documents/UA/DISSO/Data_code/td2.rda")
+setwd("~/Documents/UA/DISSO/Data_code")
+gc()
+```
+
+```{r}
+td <- td2
+rm(td2)
+```
+
+
+```{r}
+#935909
+td <- td %>% relocate(tweetclean, .after = text) %>% relocate(continent, .after= location_clean)
+```
+
+
+```{r}
+#935909 > 933446, drop 2463
+td <-  td %>% mutate_all(na_if,"")
+td <- drop_na(td)
+```
+
+```{r}
+text <- (td$tweetclean)
+```
+
+```{r}
+tic()
+vader_run <- vader_df(text)
+toc()
+save(vader_run,file="vader_run.rda")
+gc()
+```
+
+```{r}
+#load("~/Documents/UA/DISSO/Data_code/vader_run.rda")
+#load("~/Documents/UA/DISSO/Data_code/td.rda")
+td <- rename(td, 'textclean'='tweetclean')
+vader_run <- rename(vader_run, 'textclean'='text')
+save(vader_run,file="vader_run.rda")
+gc()
+```
+
+
+```{r}
+td$wordscores <- vader_run$word_scores
+td$compound <- vader_run$compound 
+td$pos <- vader_run$pos 
+td$neu <- vader_run$neu 
+td$neg <- vader_run$neg 
+td$but_count <- vader_run$but_count 
+```
+
+```{r}
+td <-  td %>% mutate_all(na_if,"")
+td <- drop_na(td)
+td <- td %>% relocate(profile_location, .after = created_at) %>% relocate(location_clean, .after = profile_location) %>%  relocate(continent, .after= location_clean)
+
+save(td,file="td_vader.rda")
+```
+
+
+
+
+

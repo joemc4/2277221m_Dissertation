@@ -1,0 +1,222 @@
+---
+title: "Vol_anal"
+author: "Joseph McMillan"
+date: "2022-07-25"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error=F,  message=F, warning=F)
+# Clears workspace so I don't have to do it manually
+rm(list = ls())
+# Clears all plotts so I don't have to do it manually 
+graphics.off()
+# Clears console so I don't have to do it manually
+cat("\014")
+#drops sci not
+options(scipen=999)
+```
+
+```{r, include=FALSE}
+library(tidyverse)
+library(parallel)
+library(pander)
+library(lubridate)
+library(maps)
+library(geosphere)
+library(countrycode)
+library(sf)
+library(cartogram)
+library(packcircles)
+library(viridis)
+```
+
+```{r, include=FALSE}
+setwd("~/Documents/UA/DISSO/Data_code")
+```
+
+```{r, include=FALSE}
+load("data_dtm.rda")
+load("data_dtm_final.rda")
+load("data_tidy.rda")
+load("gamma_df.rda")
+load("data_dtm_trim.rda")
+load("topic_n.rda")
+load("tweet_top_terms.rda")
+load("tweets_lda.rda")
+load("td_final.rda")
+```
+
+```{r, include=FALSE}
+twitterdata <- td_final
+rm(td_final)
+```
+
+```{r,include=FALSE}
+twitterdata$past_host[twitterdata$location_clean %in% c('uk', 'spain', 'poland', 'germany', 'morocco', 'france', 'peru', 'qatar', 'south africa', 'mexico', 'denmark', 'canada', 'argentina', 'italy', 'india')] <- '1'
+
+```
+
+```{r, VA - tweets per day table, echo=F}
+#drops time from date and time 
+twitterdata$created_at <- as.Date(twitterdata$created_at)
+
+twitterdata %>% count(created_at) %>% 
+  mutate(Percentage = round(n/sum(n)*100, 2)) %>% rename(Date = created_at, `No. of tweets` = n) %>% 
+  pander(split.table = 120, style = 'rmarkdown',
+         caption = 'Tweets per Day COP26: 31/10/2021 - 05/11/2021')
+```
+
+```{r, VA bar - tweets per day, echo=F}
+twitterdata %>%
+  mutate(colour = created_at %within% interval(ymd("2021-11-01"), ymd("2021-11-03"))) %>% 
+  ggplot(aes(created_at, fill=colour)) +
+  geom_bar(show.legend = FALSE) +
+  labs(title = "Tweets per Day: 31/10/2021 - 05/11/2021",
+       subtitle = "COP26 Leadership Confrence in Blue",
+       x = "Date",
+       y = "Number of Tweets",
+       caption = "Source: Twitter API")
+```
+
+```{r, echo=F}
+twitterdata %>% filter(location_clean != 'eu') %>% 
+  count(location_clean,sort = TRUE) %>% head(10) %>%  
+  mutate(Percentage = round(n/sum(n)*100, 2)) %>% rename(Country = location_clean, `No. of tweets from country` = n) %>% 
+  pander(split.table = 120, style = 'rmarkdown',
+         caption = ' Top 10 popular countries who tweeted using #cop26')
+```
+
+```{r, include=FALSE}
+region <- c("uk", "usa", "australia", "ireland", "china", "india", "france", "germany", "canada", "afghanistan", "albania", "algeria", "andorra", "angola", "antigua and barbuda", "argentina", "armenia", "austria", "azerbaijan", "bahamas", "bahrain", "bangladesh", "barbados", "belarus", "belgium", "belize", "benin", "bhutan", "bolivia", "bosnia and herzegovina", "botswana", "brazil", "brunei", "bulgaria", "burkina faso", "burundi", "cabo verde", "cambodia", "cameroon", "central african republic", "chad", "chile", "colombia", "comoros", "congo", "costa rica", "ivory coast", "croatia", "cuba", "cyprus", "czech republic", "denmark", "djibouti", "dominica", "dominican republic", "ecuador", "egypt", "el salvador", "equatorial guinea", "eritrea", "estonia", "eswatini", "ethiopia", "fiji", "finland", "gabon", "gambia", "georgia", "ghana", "greece", "grenada", "guatemala", "guinea", "guinea bissau", "guyana", "haiti", "honduras", "hungary", "iceland", "indonesia", "iran", "iraq", "israel", "italy", "jamaica", "japan", "jordan", "kazakhstan", "kenya", "kiribati", "kosovo", "kuwait", "kyrgyzstan", "laos", "latvia", "lebanon", "lesotho", "liberia", "libya", "liechtenstein", "lithuania", "luxembourg", "madagascar", "malawi", "malaysia", "mali", "malta", "marshall islands", "mauritania", "mauritius", "mexico", "micronesia", "moldova", "monaco", "mongolia", "montenegro", "morocco", "mozambique", "myanmar", "namibia", "nauru", "nepal", "netherlands", "new zealand", "nicaragua", "niger", "nigeria", "north korea", "north macedonia", "norway", "oman", "pakistan", "palau", "palestine", "panama", "papua new guinea", "paraguay", "peru", "philippines", "poland", "portugal", "qatar", "romania", "russia", "rwanda", "saint kitts and nevis", "saint lucia", "saint vincent and the grenadines", "samoa", "san marino", "sao tome and principe", "saudi arabia", "senegal", "serbia", "seychelles", "sierra leone", "singapore", "slovakia", "slovenia", "somalia", "south africa", "south korea", "south sudan", "spain", "sri lanka", "sudan", "suriname", "sweden", "switzerland", "syria", "taiwan", "tajikistan", "tanzania", "thailand", "timor leste", "togo", "tonga", "trinidad and tobago", "tunisia", "turkey", "turkmenistan", "tuvalu", "uganda", "ukraine", "uae", "uruguay", "uzbekistan", "vanuatu", "vatican city", "venezuela", "vietnam", "yemen", "zambia", "zimbabwe", "solomon islands", "maldives", "democratic republic of the congo","republic of the congo", "eswatini")
+region <- sort(region)
+tweeted_map <- map_data("world", region = region)
+region <- as.data.frame(region)
+
+bx <- twitterdata %>% select(location_clean,n,continent)
+cx <- c(unique(twitterdata$location_clean))
+cx <- sort(cx)
+cx <- as.data.frame(cx)
+ctx <- region %>% mutate(cv = region %in% cx$cx)
+
+tweeted_map <- map_data("world", region = ctx$region)
+
+```
+
+```{r, echo=F}
+region.lab.data <- tweeted_map %>%
+  group_by(region) %>%
+  summarise(long = mean(long), lat = mean(lat), cv=ctx$cv)
+```
+
+```{r, echo=FALSE}
+rl <- tweeted_map$region
+rl <- tolower(rl)
+tweeted_map$region <- rl
+tweeted_map2<-merge(x=tweeted_map,y=ctx,by="region",all.x=TRUE)
+
+tweeted_map2 <- arrange(tweeted_map2, order)
+```
+
+```{r, echo=F}
+tweeted_map2 %>% 
+ggplot(aes(x = long, y = lat)) +
+  geom_polygon(aes(group = group , fill = cv)) +
+  geom_text(aes(label =""), data = region.lab.data,  size = 3, hjust = 0.5)+
+  theme(legend.position = "bottom") +
+  labs(title = "Countries who Tweeted with #COP26",
+      subtitle = "NA and locations with less than 90 tweets per country in Red",
+      x = "",
+      caption = "Source: TwitterAPI",
+      fill="More than 90 tweets per location",
+      y = "")
+```
+
+```{r, include=FALSE}
+cx$continent <- countrycode(sourcevar = cx[,"cx"],
+                            origin = "country.name",
+                            destination = "continent")
+cx$continent[cx$cx == "eu"] <- "Europe"
+cx$continent[cx$cx == "africa"] <- "Africa"
+```
+
+```{r, echo=F}
+cx %>% select(cx,continent) %>% 
+  group_by(continent) %>% summarise(Count = n()) %>% 
+  pander(split.table = 120, style = 'rmarkdown',
+         caption = ' Top 10 popular countries who tweeted using #cop26')
+```
+
+```{r, include=FALSE}
+twitterdata$past_host[twitterdata$location_clean %in% c('uk', 'spain', 'poland', 'germany', 'morocco', 'france', 'peru', 'qatar', 'south africa', 'mexico', 'denmark', 'canada', 'argentina', 'italy', 'india')] <- '1'
+
+twitterdata$past_host[is.na(twitterdata$past_host)] <- 0
+twitterdata$past_host[twitterdata$past_host == '1'] <- "Yes"
+twitterdata$past_host[twitterdata$past_host == '0'] <- "No"
+```
+
+```{r, echo=F}
+twitterdata %>% 
+  count(past_host) %>%
+  mutate(Percentage = round(n/sum(n)*100, 2)) %>% rename(`Hosted a COP` = past_host, `No. of tweets` = n) %>% 
+  pander(split.table = 120, style = 'rmarkdown',
+         caption = 'Tweets per Day Before and During COP26')
+
+twitterdata %>% 
+  filter(location_clean != 'uk') %>% 
+  count(past_host) %>%
+  mutate(Percentage = round(n/sum(n)*100, 2)) %>% rename(`Hosted a COP` = past_host, `No. of tweets` = n) %>% 
+  pander(split.table = 120, style = 'rmarkdown',
+         caption = 'Tweets per Day Before and During COP26: UK removed')
+```
+
+```{r, echo=F}
+bx <-bx %>%
+  group_by(location_clean) %>%
+  slice(1) %>%
+  ungroup()
+```
+
+```{r, include=FALSE}
+# Create data
+data <- bx 
+ 
+# Generate the layout. This function return a dataframe with one line per bubble. 
+# It gives its center (x and y) and its radius, proportional of the value
+packing <- circleProgressiveLayout(bx$n, sizetype='area')
+ 
+# We can add these packing information to the initial data frame
+data <- cbind(data, packing)
+ 
+# Check that radius is proportional to value. We don't want a linear relationship, since it is the AREA that must be proportionnal to the value
+# plot(data$radius, data$value)
+ 
+# The next step is to go from one center + a radius to the coordinates of a circle that
+# is drawn by a multitude of straight lines.
+dat.gg <- circleLayoutVertices(packing, npoints=50)
+
+data <- data[order(-data$n),] 
+data <-  head(data, 10)
+```
+
+```{r, echo=F}
+# Make the plot
+ggplot() +  
+  
+  # Make the bubbles
+  geom_polygon(data = dat.gg, aes(x, y, location_clean = id, fill=as.factor(id)), colour = "black", alpha = 0.6) +
+  
+  # Add text in the center of each bubble + control its size
+  geom_text(data = data, aes(x, y, size=n, label = location_clean)) +
+  scale_size_continuous(range = c(1,10)) +
+  
+  # General theme:
+  theme_void() + 
+  theme(legend.position="") +
+  coord_equal() + 
+  labs(title = "Volume of Tweets per country",
+      subtitle = "Volume of Tweets: Top 10 Countries Listed",
+      caption = "Source: TwitterAPI")
+```

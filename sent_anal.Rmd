@@ -1,0 +1,373 @@
+---
+title: "Senti_graphs"
+author: "Joseph McMillan"
+date: "2022-08-13"
+output:
+  pdf_document: default
+  html_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error=F,  message=F, warning=F)
+# Clears workspace so I don't have to do it manually
+rm(list = ls())
+# Clears all plotts so I don't have to do it manually 
+graphics.off()
+# Clears console so I don't have to do it manually
+cat("\014")
+#drops sci not
+options(scipen=999)
+```
+
+```{r, echo=F}
+library(tidyverse)
+library(parallel)
+library(pander)
+library(lubridate)
+library(maps)
+library(geosphere)
+library(countrycode)
+library(hrbrthemes)
+library(reshape2)
+library(fastDummies)
+```
+
+```{r, echo=F}
+setwd("~/Documents/UA/DISSO/Data_code")
+```
+
+```{r, echo=F}
+# load("data_dtm.rda")
+# load("data_dtm_final.rda")
+# load("data_dtm_trim.rda")
+# load("data_tidy.rda")
+# load("gamma_df.rda")
+# load("data_dtm_trim.rda")
+# load("topic_n.rda")
+# load("tweet_top_terms.rda")
+# load("tweets_lda.rda")
+load("td_final.rda")
+```
+
+```{r, echo=F}
+td_final$vader_sum[td_final$compound < '0.000'] <- "Negative"
+
+td_final$vader_sum[td_final$neu == '1'] <- "Netural"
+
+td_final$vader_sum[td_final$compound >= '0.001'] <- "Positive"
+```
+
+```{r, echo=F}
+td_final <- td_final %>% 
+  mutate(date_dup = created_at)
+td_final$created_at <- as.Date(td_final$created_at)
+```
+
+```{r, echo=F}
+td_final %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Day",
+       subtitle = "31/10/2021 - 05/11/2021",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")
+
+posneg <- td_final %>% select(vader_sum, created_at)
+
+posneg <- fastDummies::dummy_columns(posneg)
+
+sentsumtab <- posneg %>% group_by(created_at) %>% count(vader_sum) 
+
+posneg %>% select(-vader_sum) %>% group_by("Date" = created_at) %>% summarise("Negative" = sum(vader_sum_Negative), "Netural" = sum(vader_sum_Netural), "Positive" = sum(vader_sum_Positive)) %>% pander(split.table = 120, style = 'rmarkdown', 
+         caption = 'Sum of Sentiment By Day')
+```
+
+```{r, echo=F}
+sentsumtab %>% 
+  ggplot(aes(sentsumtab, x = created_at, y = n, colour = vader_sum)) + 
+  geom_line() +
+  geom_point() +
+ labs(title = "Line chart of sentiment over COP26",
+       subtitle = "31/10/2021 - 05/11/2021",
+       x = "Day",
+       y = "Sentiment Score",
+       colour = "Sentiment",
+       caption = "Source: Twitter API"
+      ) 
+```
+
+```{r, echo=F}
+count_sent <- td_final %>% select(location_clean, vader_sum)
+
+count_sent <- fastDummies::dummy_columns(td_final$vader_sum)
+
+td_final$neg_dum <- count_sent$.data_Negative
+td_final$net_dum <- count_sent$.data_Netural
+td_final$pos_dum <- count_sent$.data_Positive
+
+count_sent_tab <- td_final %>% filter(neg_dum == "1") %>% group_by(location_clean) %>% count(neg_dum)
+count_sent_tab <- count_sent_tab %>% select(-neg_dum)
+count_sent_tab <- as.data.frame(count_sent_tab)
+names(count_sent_tab)[2] <- "Negative"
+
+count_sent_net <- td_final %>% filter(net_dum == "1") %>% group_by(location_clean) %>% count(net_dum)
+count_sent_net <- as.data.frame(count_sent_net)
+count_sent_net <- count_sent_net %>% select(-location_clean)
+count_sent_net <- count_sent_net %>% select(-net_dum)
+count_sent_tab$netural <- count_sent_net$n
+count_sent_tab <- as.data.frame(count_sent_tab)
+names(count_sent_tab)[3] <- "Netural"
+
+count_sent_pos <- td_final %>% filter(pos_dum == "1") %>% group_by(location_clean) %>% count(pos_dum)
+count_sent_pos <- as.data.frame(count_sent_pos)
+count_sent_pos <- count_sent_pos %>% select(-location_clean)
+count_sent_pos <- count_sent_pos %>% select(-pos_dum)
+count_sent_tab$positive <- count_sent_pos$n
+count_sent_tab <- as.data.frame(count_sent_tab)
+names(count_sent_tab)[4] <- "Positive"
+count_sent_tab <- count_sent_tab[order(-count_sent_tab$Positive),]
+names(count_sent_tab)[1] <- "Country"
+count_sent_tab_head <- head(count_sent_tab, 10)
+count_sent_tab_head$Total = rowSums(count_sent_tab_head[,c("Negative", "Netural", "Positive")])
+count_sent_tab_head$`Neg_%` = 100*(count_sent_tab_head$Negative/count_sent_tab_head$Total) 
+count_sent_tab_head <- count_sent_tab_head%>% relocate(`Neg_%`, .after = Negative)
+count_sent_tab_head$`Net_%` = 100*(count_sent_tab_head$Netural/count_sent_tab_head$Total) 
+count_sent_tab_head <- count_sent_tab_head%>% relocate(`Net_%`, .after = Netural)
+count_sent_tab_head$`Pos_%` = 100*(count_sent_tab_head$Positive/count_sent_tab_head$Total) 
+count_sent_tab_head <- count_sent_tab_head%>% relocate(`Pos_%`, .after = Positive)
+```
+
+```{r, echo=F}
+count_sent_tab_head %>% filter(Country != "eu") %>% pander(split.table = 120, style = 'rmarkdown', 
+         caption = 'Table: Sentiment By Country(Top10)')
+```
+
+```{r, echo=F}
+cont_sent <- td_final %>% select(continent, vader_sum)
+
+cont_sent <- fastDummies::dummy_columns(td_final$vader_sum)
+
+td_final$neg_dum <- count_sent$.data_Negative
+td_final$net_dum <- count_sent$.data_Netural
+td_final$pos_dum <- count_sent$.data_Positive
+
+cont_sent_tab <- td_final %>% filter(neg_dum == "1") %>% group_by(continent) %>% count(neg_dum)
+cont_sent_tab <- cont_sent_tab %>% select(-neg_dum)
+cont_sent_tab <- as.data.frame(cont_sent_tab)
+names(cont_sent_tab)[2] <- "Negative"
+
+cont_sent_net <- td_final %>% filter(net_dum == "1") %>% group_by(continent) %>% count(net_dum)
+cont_sent_net <- as.data.frame(cont_sent_net)
+cont_sent_net <- cont_sent_net %>% select(-continent)
+cont_sent_net <- cont_sent_net %>% select(-net_dum)
+cont_sent_tab$netural <- cont_sent_net$n
+cont_sent_tab <- as.data.frame(cont_sent_tab)
+names(cont_sent_tab)[3] <- "Netural"
+
+cont_sent_pos <- td_final %>% filter(pos_dum == "1") %>% group_by(continent) %>% count(pos_dum)
+cont_sent_pos <- as.data.frame(cont_sent_pos)
+cont_sent_pos <- cont_sent_pos %>% select(-continent)
+cont_sent_pos <- cont_sent_pos %>% select(-pos_dum)
+cont_sent_tab$positive <- cont_sent_pos$n
+cont_sent_tab <- as.data.frame(cont_sent_tab)
+names(cont_sent_tab)[4] <- "Positive"
+names(cont_sent_tab)[1] <- "Continent"
+
+cont_sent_tab$Total = rowSums(cont_sent_tab[,c("Negative", "Netural", "Positive")])
+
+cont_sent_tab$`Neg_%` = 100*(cont_sent_tab$Negative/cont_sent_tab$Total) 
+cont_sent_tab <- cont_sent_tab%>% relocate(`Neg_%`, .after = Negative)
+
+cont_sent_tab$`Net_%` = 100*(cont_sent_tab$Netural/cont_sent_tab$Total)
+cont_sent_tab <- cont_sent_tab%>% relocate(`Net_%`, .after = Netural)
+
+cont_sent_tab$`Pos_%` = 100*(cont_sent_tab$Positive/cont_sent_tab$Total) 
+cont_sent_tab <- cont_sent_tab%>% relocate(`Pos_%`, .after = Positive)
+```
+
+
+
+```{r, echo=F}
+cont_sent_tab %>% pander(split.table = 120, style = 'rmarkdown', 
+         caption = 'Table: Sentiment By Continent')
+```
+
+```{r, out.width='50%', fig.show='hold', echo=FALSE}
+td_final %>% 
+  filter(location_clean == "uk") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Country:",
+       subtitle = "UK",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")
+
+td_final %>% 
+  filter(location_clean == "usa") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Country:",
+       subtitle = "USA",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")
+
+td_final %>% 
+  filter(location_clean == "india") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Country:",
+       subtitle = "India",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")
+
+td_final %>% 
+  filter(location_clean == "australia") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Country:",
+       subtitle = "Australia",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")     
+
+td_final %>% 
+  filter(location_clean == "canada") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Country:",
+       subtitle = "Canada",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")
+
+td_final %>% 
+  filter(location_clean == "germany") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Country:",
+       subtitle = "Germany",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")   
+
+td_final %>% 
+  filter(location_clean == "kenya") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Country:",
+       subtitle = "Kenya",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")  
+
+td_final %>% 
+  filter(location_clean == "france") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Country:",
+       subtitle = "France",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")   
+
+td_final %>% 
+  filter(location_clean == "ireland") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Country:",
+       subtitle = "Ireland",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")  
+
+td_final %>% 
+  filter(location_clean == "belgium") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Country:",
+       subtitle = "Beligum",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API") 
+```
+
+
+```{r, out.width='50%', fig.show='hold', echo=FALSE}
+td_final %>% 
+  filter(continent == "Europe") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Continent:",
+       subtitle = "Europe",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")
+
+td_final %>% 
+  filter(continent == "Americas") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Continent:",
+       subtitle = "Americas",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")
+
+td_final %>% 
+  filter(continent == "Asia") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Continent:",
+       subtitle = "Asia",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")
+
+td_final %>% 
+  filter(continent == "Africa") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Continent:",
+       subtitle = "Africa",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")
+
+td_final %>% 
+  filter(continent == "Oceania") %>% 
+  ggplot(aes(created_at, fill = vader_sum)) +  
+  geom_bar(stat = 'count', colour = "black", position = 'fill') +
+  labs(title = "Negative, Netural, & Positive Sentiment by Continent:",
+       subtitle = "Oceania",
+       x = "Day",
+       y = "Sentiment Percentage",
+       fill="Sentiment",
+       caption = "Source: Twitter API")
+
+```
+
+```{r, echo=F}
+save(td_final, file = "td_final_sent.rda")
+```
+

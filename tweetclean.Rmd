@@ -1,0 +1,145 @@
+---
+title: "Text cleaning"
+author: "Joseph McMillan"
+date: "2022-07-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, error=F,  message=F, warning=F)
+# Clears workspace so I don't have to do it manually
+rm(list = ls())
+# Clears all plotts so I don't have to do it manually 
+graphics.off()
+# Clears console so I don't have to do it manually
+cat("\014")
+#drops sci not
+options(scipen=999)
+```
+
+```{r}
+library(tidyverse)
+library(NLP)
+library(tm)
+library(textclean)
+library(tictoc)
+```
+
+```{r, include=FALSE}
+setwd("~/Documents/UA/DISSO/Data_code")
+load("~/Documents/UA/DISSO/Data_code/tweets_location.rda")
+gc()
+
+```
+
+```{r}
+fulltext <- twitterdata$text
+```
+
+```{r}
+#stops words list
+all_stops <- c("glasgow", "the", "uk", "scotland", "cop26", "cop", "c26", "took", "ive", "amp", "can", "now", "will", "just", "see", "take", "day", "one", "get", "cop26glasgow", "around", "rt", "íí", "get", "like", "just", "yes", "know", "will", "good", "day", "week", "past","today","todays","year","years","days","tomorrow","yesterday","time","will","can","cant", "must", "needs", "isnt", "want", "needed", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december", "never", "just", "around", "next", "ever", "still", "also", "really", "please","every","via","almost","without","enough","even","yet","take","took","get","like","know","yes","put","going","make","see","need","seen","tell","say","says","said","saying","hear","telling","call","called","calling","talk","talks","think","talking", "asked","told","speaking","speak","listen","got","100","zero","400","one","two", "whats", "everything","another", "word", "words", "many", "much", "thats", "means", "theyre", "youre", "text", "sir", "theres", "language", "dont", "doesnt", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday","sunday", "2022","eah", "...", "lol", "\n",  stopwords("en"))
+
+swears <- read.csv("~/Documents/UA/DISSO/Data_code/swears.csv")
+swears <- swears$swears
+```
+
+```{r, old text cleaning}
+#drops all text to lower case for parity
+#fulltext<- tolower(fulltext)
+#removes retweet text
+#fulltext<- gsub("rt", "", fulltext)
+#removes @ usernames
+#fulltext<- gsub("@\\w+", "", fulltext)
+#removes punctuation 
+#fulltext<- gsub("[[:punct:]]", "", fulltext)
+#removes hyper links
+#fulltext<- gsub("http\\w+", "", fulltext)
+#removes space at the start
+#fulltext<- gsub("^ ", "", fulltext)
+#removes spaces at the end
+#fulltext<- gsub(" $", "", fulltext)
+#remove 1 and 2 letter words
+#fulltext<- gsub(" *\\b[[:alpha:]]{1,2}\\b *", " ", fulltext)
+#removes premade list of text
+#fulltext<- fulltext %>% removeWords(all_stops)
+#fulltext<- fulltext %>% removeWords(swears)
+#remove random blank spaces
+#fulltext<- gsub("^ +| +$|( ) +", "\\1", fulltext)
+```
+
+```{r}
+tic()
+#drops all text to lower case for parity
+fulltext<- tolower(fulltext)
+#blanks out hashtags
+fulltext <- replace_hash(fulltext)
+#undo contractions
+fulltext <- replace_contraction(fulltext)
+#replace emojis/emoticons
+#fulltext <- replace_emoji(fulltext)
+#fulltext <- replace_emoticon(fulltext)
+#drop unfinished sentences
+fulltext <- replace_incomplete(fulltext, replacement = "")
+#replace word elongation
+fulltext <- replace_word_elongation(fulltext)
+#removes retweet text
+fulltext<- gsub("^rt$", "", fulltext)
+#removes @ usernames
+fulltext<- gsub("@\\w+", "", fulltext)
+#removes punctuation 
+fulltext<- gsub("[[:punct:]]", "", fulltext)
+#removes hyper links
+fulltext<- gsub("http\\w+", "", fulltext)
+#removes space at the start
+fulltext<- gsub("^ ", "", fulltext)
+#removes spaces at the end
+fulltext<- gsub(" $", "", fulltext)
+#remove 1 and 2 letter words
+fulltext<- gsub(" *\\b[[:alpha:]]{1,2}\\b *", " ", fulltext)
+fulltext <- gsub("\\b[[:alpha:]]{16,}\\b", "", fulltext, perl=T)
+#removes premade list of text
+fulltext <- fulltext %>% removeWords(all_stops)
+fulltext <- fulltext %>% removeWords(swears)
+#replace internet slang
+fulltext <- replace_internet_slang(fulltext) 
+#remove random blank spaces
+fulltext<- gsub("^ +| +$|( ) +", "\\1", fulltext)
+fulltext<- gsub("  ", " ", fulltext)
+fulltext<- gsub("   ", " ", fulltext)
+fulltext<- gsub("^ +| +$|( ) +", "\\1", fulltext)
+toc()
+```
+
+```{r}
+twitterdata$tweetclean <- fulltext
+```
+
+```{r}
+twitterdata <- drop_na(twitterdata)
+```
+
+```{r}
+library(tokenizers)
+fulltext <- fulltext %>% 
+  tokenize_words() %>% 
+  as.character()
+
+library(RColorBrewer)
+library(wordcloud)
+wordcloud(fulltext,
+         min.freq=1, 
+         max.words = 50, 
+         random.order = FALSE, 
+         colors=brewer.pal(7, "Set2")) 
+```
+
+```{r}
+td2 <- twitterdata
+```
+
+
+```{r}
+save(td2,file="td2.rda")
+```
+
